@@ -1,0 +1,7 @@
+Model,Size_MB,Load_Time_s,Latency_ms,FPS,RAM_MB,Runtime_s,Estimated_Energy_J
+ViT_Transformer,23.42,1.67,236.96,4.22,312.78,488.86,3422.02
+ViT_MLP,21.44,1.74,230.62,4.34,327.08,474.29,3320.03
+EfficientNet_Transformer,19.2,9.66,706.14,1.42,332.54,1425.36,9977.52
+EfficientNet_MLP,16.14,1.2,699.13,1.43,338.47,1411.2,9878.4
+MobileNet_Transformer,9.48,0.69,183.4,5.45,338.68,379.82,2658.74
+MobileNet_MLP,6.42,0.55,175.66,5.69,338.68,364.29,2550.03
