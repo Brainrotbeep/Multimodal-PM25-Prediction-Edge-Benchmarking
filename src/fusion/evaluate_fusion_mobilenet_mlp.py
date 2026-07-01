@@ -1,21 +1,41 @@
+import sys
+from pathlib import Path
+
+# Add project root to Python path
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(PROJECT_ROOT))
+
 import joblib
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision import transforms
-from sklearn.metrics import confusion_matrix
+
+from evaluate_metrics import save_metrics
 
 from src.fusion.fusion_dataset import FusionDataset
 from src.fusion.fusion_model_mobilenet_mlp import FusionMobileNetMLP
 
+
+# =====================================================
 # DEVICE
+# =====================================================
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using Device:", device)
 
+
+# =====================================================
 # SCALER
+# =====================================================
+
 scaler = joblib.load("models/fusion_scaler.pkl")
 
+
+# =====================================================
 # TEST TRANSFORM
+# =====================================================
+
 test_transform = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
@@ -25,7 +45,11 @@ test_transform = transforms.Compose([
     )
 ])
 
+
+# =====================================================
 # TEST DATASET
+# =====================================================
+
 test_dataset = FusionDataset(
     csv_file="data/clean_test_metadata.csv",
     image_dir="data/test_images",
@@ -35,7 +59,11 @@ test_dataset = FusionDataset(
 
 print(f"Test Dataset Loaded: {len(test_dataset)} samples")
 
+
+# =====================================================
 # DATALOADER
+# =====================================================
+
 test_loader = DataLoader(
     test_dataset,
     batch_size=32,
@@ -44,7 +72,11 @@ test_loader = DataLoader(
     pin_memory=torch.cuda.is_available()
 )
 
+
+# =====================================================
 # MODEL
+# =====================================================
+
 model = FusionMobileNetMLP()
 
 model.load_state_dict(
@@ -58,11 +90,23 @@ model.load_state_dict(
 model = model.to(device)
 model.eval()
 
-print("Model Loaded")
+print("Fusion MobileNet + MLP Model Loaded")
 
+
+# =====================================================
+# LOSS
+# =====================================================
+
+criterion = nn.CrossEntropyLoss()
+
+
+# =====================================================
 # EVALUATION
+# =====================================================
+
 correct = 0
 total = 0
+total_loss = 0.0
 
 num_classes = 6
 
@@ -72,8 +116,6 @@ class_total = [0] * num_classes
 all_labels = []
 all_predictions = []
 
-criterion = nn.CrossEntropyLoss()
-total_loss = 0.0
 
 with torch.no_grad():
 
@@ -90,78 +132,77 @@ with torch.no_grad():
 
         _, predicted = torch.max(outputs, 1)
 
-        all_labels.extend(
-            labels.cpu().numpy()
-        )
-
-        all_predictions.extend(
-            predicted.cpu().numpy()
-        )
+        all_labels.extend(labels.cpu().numpy())
+        all_predictions.extend(predicted.cpu().numpy())
 
         total += labels.size(0)
-
-        correct += (
-            predicted == labels
-        ).sum().item()
+        correct += (predicted == labels).sum().item()
 
         for label, pred in zip(labels, predicted):
 
-            class_correct[label] += (
-                pred == label
-            ).item()
-
+            class_correct[label] += (pred == label).item()
             class_total[label] += 1
 
-# RESULTS
-avg_loss = total_loss / len(test_loader)
 
+# =====================================================
+# RESULTS
+# =====================================================
+
+avg_loss = total_loss / len(test_loader)
 accuracy = 100 * correct / total
 
-print(f"\n{'='*40}")
-print(f"Test Loss:     {avg_loss:.4f}")
-print(f"Test Accuracy: {accuracy:.2f}%")
-print(f"{'='*40}")
+print("\n" + "=" * 50)
+print("Fusion MobileNet + MLP Evaluation")
+print("=" * 50)
 
-print("\nPer-Class Accuracy:")
+print(f"Test Loss     : {avg_loss:.4f}")
+print(f"Test Accuracy : {accuracy:.2f}%")
+
+print("=" * 50)
+
+print("\nPer-Class Accuracy\n")
 
 for i in range(num_classes):
 
     if class_total[i] > 0:
 
-        class_acc = (
-            100 * class_correct[i]
-            / class_total[i]
-        )
+        class_acc = 100 * class_correct[i] / class_total[i]
 
         bar = (
             "█" * int(class_acc // 5)
-            +
-            "░" * (
-                20 - int(class_acc // 5)
-            )
+            + "░" * (20 - int(class_acc // 5))
         )
 
         print(
-            f"  Class {i}: "
+            f"Class {i}: "
             f"{bar} "
             f"{class_acc:.2f}% "
-            f" ({class_correct[i]}/{class_total[i]})"
+            f"({class_correct[i]}/{class_total[i]})"
         )
 
     else:
 
-        print(
-            f"  Class {i}: no samples"
-        )
+        print(f"Class {i}: No Samples")
 
-# CONFUSION MATRIX
-cm = confusion_matrix(
-    all_labels,
-    all_predictions
+
+# =====================================================
+# SAVE METRICS
+# =====================================================
+
+class_names = [
+    "0-50",
+    "51-100",
+    "101-150",
+    "151-200",
+    "201-300",
+    "301-600"
+]
+
+save_metrics(
+    true_labels=all_labels,
+    predictions=all_predictions,
+    class_names=class_names,
+    model_name="fusion_mobilenet_mlp"
 )
 
-print(f"\n{'='*40}")
-print("CONFUSION MATRIX")
-print(f"{'='*40}")
-
-print(cm)
+print("\nAll evaluation files saved successfully.")

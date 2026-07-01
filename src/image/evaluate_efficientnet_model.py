@@ -1,18 +1,33 @@
+import sys
+from pathlib import Path
+
+# Add project root to Python path
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(PROJECT_ROOT))
+
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision import transforms
 
+from evaluate_metrics import save_metrics
+
 from src.image.image_dataset import ImageDataset
 from src.image.efficientnet_model import EfficientNetClassifier
 
 
+# =====================================================
 # DEVICE
+# =====================================================
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using Device:", device)
 
 
+# =====================================================
 # TEST TRANSFORM
+# =====================================================
+
 test_transform = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
@@ -23,7 +38,10 @@ test_transform = transforms.Compose([
 ])
 
 
+# =====================================================
 # TEST DATASET
+# =====================================================
+
 test_dataset = ImageDataset(
     csv_file="data/clean_test_metadata.csv",
     image_dir="data/test_images",
@@ -33,7 +51,10 @@ test_dataset = ImageDataset(
 print(f"Test Dataset Loaded: {len(test_dataset)} samples")
 
 
+# =====================================================
 # DATALOADER
+# =====================================================
+
 test_loader = DataLoader(
     test_dataset,
     batch_size=32,
@@ -43,7 +64,10 @@ test_loader = DataLoader(
 )
 
 
+# =====================================================
 # MODEL
+# =====================================================
+
 model = EfficientNetClassifier(num_classes=6)
 
 model.load_state_dict(
@@ -59,17 +83,29 @@ model.eval()
 print("EfficientNet-B0 Model Loaded")
 
 
+# =====================================================
 # LOSS
+# =====================================================
+
 criterion = nn.CrossEntropyLoss()
 
+
+# =====================================================
 # EVALUATION
+# =====================================================
+
 correct = 0
 total = 0
 total_loss = 0.0
 
 num_classes = 6
+
 class_correct = [0] * num_classes
 class_total = [0] * num_classes
+
+# Needed for evaluation metrics
+all_labels = []
+all_predictions = []
 
 
 with torch.no_grad():
@@ -86,6 +122,10 @@ with torch.no_grad():
 
         _, predicted = torch.max(outputs, 1)
 
+        # Store predictions
+        all_labels.extend(labels.cpu().numpy())
+        all_predictions.extend(predicted.cpu().numpy())
+
         total += labels.size(0)
         correct += (predicted == labels).sum().item()
 
@@ -95,24 +135,29 @@ with torch.no_grad():
             class_total[label] += 1
 
 
-# RESULTS
+# =====================================================
+# BASIC RESULTS
+# =====================================================
+
 avg_loss = total_loss / len(test_loader)
 accuracy = 100 * correct / total
 
-print(f"\n{'='*40}")
-print(f"Test Loss:     {avg_loss:.4f}")
-print(f"Test Accuracy: {accuracy:.2f}%")
-print(f"{'='*40}")
+print("\n" + "=" * 50)
+print("EfficientNet-B0 Evaluation")
+print("=" * 50)
 
-print("\nPer-Class Accuracy:")
+print(f"Test Loss     : {avg_loss:.4f}")
+print(f"Test Accuracy : {accuracy:.2f}%")
+
+print("=" * 50)
+
+print("\nPer-Class Accuracy\n")
 
 for i in range(num_classes):
 
     if class_total[i] > 0:
 
-        class_acc = (
-            100 * class_correct[i] / class_total[i]
-        )
+        class_acc = 100 * class_correct[i] / class_total[i]
 
         bar = (
             "█" * int(class_acc // 5)
@@ -121,7 +166,7 @@ for i in range(num_classes):
         )
 
         print(
-            f"  Class {i}: "
+            f"Class {i} : "
             f"{bar} "
             f"{class_acc:.2f}% "
             f"({class_correct[i]}/{class_total[i]})"
@@ -129,6 +174,27 @@ for i in range(num_classes):
 
     else:
 
-        print(
-            f"  Class {i}: no samples"
-        )
+        print(f"Class {i}: No Samples")
+
+
+# =====================================================
+# SAVE METRICS
+# =====================================================
+
+class_names = [
+    "0-50",
+    "51-100",
+    "101-150",
+    "151-200",
+    "201-300",
+    "301-600"
+]
+
+save_metrics(
+    true_labels=all_labels,
+    predictions=all_predictions,
+    class_names=class_names,
+    model_name="efficientnet"
+)
+
+print("\nAll evaluation files saved successfully.")

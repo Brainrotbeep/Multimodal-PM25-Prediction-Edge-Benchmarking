@@ -1,0 +1,8 @@
+FINAL MODEL SUMMARY
+============================================================
+
+Best Overall Model : EfficientNet + Transformer
+Accuracy : 53.68%
+Weighted F1 : 52.36%
+Weighted Precision : 52.87%
+Weighted Recall : 53.68%
